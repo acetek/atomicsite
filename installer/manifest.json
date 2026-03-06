@@ -1,0 +1,28 @@
+{
+  "name": "Onsite CIO Interview Portal",
+  "version": "1.0.0",
+  "new_install_prompt_erase": true,
+  "builds": [
+    {
+      "chipFamily": "ESP32",
+      "parts": [
+        {
+          "path": "../firmware/build/bootloader.bin",
+          "offset": 4096
+        },
+        {
+          "path": "../firmware/build/partitions.bin",
+          "offset": 32768
+        },
+        {
+          "path": "../firmware/build/firmware.bin",
+          "offset": 65536
+        },
+        {
+          "path": "../firmware/build/littlefs.bin",
+          "offset": 2162688
+        }
+      ]
+    }
+  ]
+}

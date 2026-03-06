@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Onsite CIO Interview Portal</title>
+  <style>
+    :root { --theme: #1f6feb; }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f6f8fa; color: #111; }
+    header { background: var(--theme); color: white; padding: 16px; display:flex; gap:12px; align-items:center; }
+    header img { height: 40px; width: 40px; object-fit: cover; border-radius: 4px; background: #fff; }
+    main { padding: 16px; display:grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 12px; }
+    section { background: white; border-radius: 8px; padding: 12px; box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+    h2 { margin: 0 0 10px; font-size: 1.1rem; }
+    input, textarea, button, select { width: 100%; margin: 6px 0; padding: 8px; }
+    ul { padding-left: 18px; }
+    .row { display:flex; gap:8px; }
+    .row > * { flex:1; }
+    .muted { font-size:.9rem; color:#555; }
+  </style>
+</head>
+<body>
+<header>
+  <img id="logoPreview" alt="logo" />
+  <div>
+    <div id="companyTitle">Onsite CIO Demo</div>
+    <div class="muted">Captive Portal Technician Platform</div>
+  </div>
+</header>
+
+<main>
+  <section>
+    <h2>Onboarding</h2>
+    <label>Mode</label>
+    <select id="modeSelect">
+      <option>Technician mode</option>
+      <option>Client mode</option>
+    </select>
+    <button onclick="logAction('Mode switched to ' + modeSelect.value)">Apply Mode</button>
+    <p class="muted">SSID: <b>OnsiteCIO-Demo</b> | Fallback: <b>http://192.168.4.1</b></p>
+  </section>
+
+  <section>
+    <h2>Laptop Replacement Playbook</h2>
+    <div id="checklist"></div>
+    <button onclick="saveChecklist()">Save checklist</button>
+    <button onclick="downloadHandoff()">Download handoff report (JSON)</button>
+  </section>
+
+  <section>
+    <h2>Software Deployment Catalog</h2>
+    <div id="profiles"></div>
+  </section>
+
+  <section>
+    <h2>Branding Studio</h2>
+    <input id="companyName" placeholder="Company Name" />
+    <input id="supportEmail" placeholder="Support Email" />
+    <input id="supportPhone" placeholder="Support Phone" />
+    <input id="themeColor" type="color" value="#1f6feb" />
+    <label>Logo Upload</label>
+    <input id="logoUpload" type="file" accept="image/*" />
+    <button onclick="saveBranding()">Save branding</button>
+  </section>
+
+  <section>
+    <h2>Client Handoff Microsite Preview</h2>
+    <div id="handoffPreview"></div>
+  </section>
+
+  <section>
+    <h2>Audit Timeline</h2>
+    <ul id="logs"></ul>
+    <div class="row">
+      <button onclick="exportCsv()">Export CSV</button>
+      <button onclick="resetDemo()">Reset Demo</button>
+    </div>
+  </section>
+</main>
+
+<script>
+let state = null;
+
+async function api(path, options={}) {
+  const res = await fetch(path, {
+    headers: {'Content-Type':'application/json'},
+    ...options
+  });
+  if (!res.ok) throw new Error(await res.text());
+  const ct = res.headers.get('content-type') || '';
+  return ct.includes('application/json') ? res.json() : res.text();
+}
+
+function render() {
+  const b = state.branding;
+  document.documentElement.style.setProperty('--theme', b.themeColor || '#1f6feb');
+  companyTitle.textContent = b.companyName || 'Onsite CIO Demo';
+  logoPreview.src = b.logoDataUrl || 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%23fff"/><text x="7" y="30" font-size="20">IT</text></svg>';
+
+  companyName.value = b.companyName || '';
+  supportEmail.value = b.supportEmail || '';
+  supportPhone.value = b.supportPhone || '';
+  themeColor.value = b.themeColor || '#1f6feb';
+
+  checklist.innerHTML = '';
+  state.checklist.forEach((item, idx) => {
+    const wrap = document.createElement('div');
+    wrap.innerHTML = `
+      <label><input type="checkbox" ${item.done ? 'checked' : ''} onchange="toggleItem(${idx}, this.checked)"> ${item.title}</label>
+      <textarea placeholder="Notes" oninput="noteItem(${idx}, this.value)">${item.notes||''}</textarea>
+    `;
+    checklist.appendChild(wrap);
+  });
+
+  profiles.innerHTML = '';
+  state.profiles.forEach(p => {
+    const card = document.createElement('div');
+    card.innerHTML = `<b>${p.name}</b><br><span class="muted">${p.packages}</span><br><small>${p.checks}</small>`;
+    const btn = document.createElement('button');
+    btn.textContent = 'Apply Profile';
+    btn.addEventListener('click', () => logAction(`Applied profile: ${p.name}`));
+    card.appendChild(btn);
+    profiles.appendChild(card);
+  });
+
+  handoffPreview.innerHTML = `
+    <h3>Welcome to your new device</h3>
+    <p>Need help? Contact ${b.supportEmail || 'support@example.com'} or ${b.supportPhone || '(555) 555-5555'}.</p>
+    <p>First-day checklist: Sign in, verify email, open core apps, confirm backup sync.</p>
+  `;
+
+  logs.innerHTML = '';
+  [...state.logs].reverse().slice(0, 15).forEach(l => {
+    const li = document.createElement('li');
+    li.textContent = `${l.timestamp}: ${l.message}`;
+    logs.appendChild(li);
+  });
+}
+
+function toggleItem(index, done) { state.checklist[index].done = done; }
+function noteItem(index, notes) { state.checklist[index].notes = notes; }
+
+async function saveChecklist() {
+  state = await api('/api/state', {method:'POST', body: JSON.stringify({checklist: state.checklist})});
+  await logAction('Checklist saved');
+}
+
+async function saveBranding() {
+  state.branding.companyName = companyName.value;
+  state.branding.supportEmail = supportEmail.value;
+  state.branding.supportPhone = supportPhone.value;
+  state.branding.themeColor = themeColor.value;
+  state = await api('/api/state', {method:'POST', body: JSON.stringify({branding: state.branding})});
+  await logAction('Branding updated');
+}
+
+logoUpload.addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const dataUrl = await new Promise(resolve => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result);
+    r.readAsDataURL(file);
+  });
+  state.branding.logoDataUrl = dataUrl;
+  render();
+});
+
+async function logAction(message) {
+  await api('/api/log', {method:'POST', body: JSON.stringify({message})});
+  state = await api('/api/state');
+  render();
+}
+
+function downloadHandoff() {
+  const blob = new Blob([JSON.stringify({branding: state.branding, checklist: state.checklist}, null, 2)], {type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'handoff-report.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function exportCsv() { window.location.href = '/api/export/log.csv'; }
+
+async function resetDemo() {
+  state = await api('/api/reset', {method:'POST'});
+  render();
+}
+
+(async function init(){
+  state = await api('/api/state');
+  render();
+})();
+</script>
+</body>
+</html>
